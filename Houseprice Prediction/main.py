@@ -2,57 +2,87 @@ import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import r2_score, root_mean_squared_error, mean_squared_error
+from sklearn.metrics import (
+    r2_score,
+    mean_squared_error,
+    root_mean_squared_error,
+)
 
-ohe = OneHotEncoder(sparse_output=False)
-lr = LinearRegression()
-
+# Load dataset
 dataset = pd.read_csv("housePrice.csv")
 
-dataset["Area"] = dataset["Area"].astype(str).str.replace(",","")
+# Clean Area column
+dataset["Area"] = (
+    dataset["Area"]
+    .astype(str)
+    .str.replace(",", "", regex=False)
+)
 dataset["Area"] = pd.to_numeric(dataset["Area"])
 
-encode = ohe.fit_transform(dataset[["Address"]])
-encode_df = pd.DataFrame(encode, columns=ohe.get_feature_names_out(["Address"]))
-dataset = pd.concat([dataset.drop("Address", axis=1), encode_df], axis=1)
+# One-Hot Encode Address
+ohe = OneHotEncoder(sparse_output=False, handle_unknown="ignore")
 
-X = dataset.drop(["Price(USD)"], axis=1)
-Y = dataset["Price(USD)"]
+encoded = ohe.fit_transform(dataset[["Address"]])
 
-x_train, x_test, y_trian, y_test = train_test_split(X, Y, random_state=42, test_size=0.2)
+encoded_df = pd.DataFrame(
+    encoded,
+    columns=ohe.get_feature_names_out(["Address"])
+)
 
-lr.fit(x_train, y_trian)
+dataset = pd.concat(
+    [dataset.drop("Address", axis=1), encoded_df],
+    axis=1
+)
 
-lr.score(x_test, y_test)
+# Features and Target
+X = dataset.drop("Price(USD)", axis=1)
+y = dataset["Price(USD)"]
 
-y_pred = lr.predict(x_test)
+# Train/Test Split
+x_train, x_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.2,
+    random_state=42
+)
 
-print("R2: ", r2_score(y_test, y_pred))
-print("MSE: ", mean_squared_error(y_test, y_pred))
-print("RMSE: ", root_mean_squared_error(y_test, y_pred))
+# Train Model
+model = LinearRegression()
+model.fit(x_train, y_train)
 
-ar = int(input("Area : "))
-ro = int(input("Room : "))
-pr = bool(input("Parking : "))
-wh = bool(input("Warehouse: "))
-el = bool(input("Elevator: "))
-pr = int(input("Price: "))
-ad = input("Address : ")
+# Evaluation
+y_pred = model.predict(x_test)
 
-input_dict = {"Area" : ar,
-              "Room" : ro,
-              "Parking" : pr,
-              "Warehouse" : wh,
-              "Elevator" : el,
-              "Price" : pr,
-              f"Address_{ad}" : 1}
+print("R² Score :", r2_score(y_test, y_pred))
+print("MSE      :", mean_squared_error(y_test, y_pred))
+print("RMSE     :", root_mean_squared_error(y_test, y_pred))
 
+# ---------------------------
+# User Prediction
+# ---------------------------
 
-input_df = pd.DataFrame(columns=X.columns)
+area = int(input("Area: "))
+room = int(input("Room: "))
+parking = int(input("Parking (0/1): "))
+warehouse = int(input("Warehouse (0/1): "))
+elevator = int(input("Elevator (0/1): "))
+address = input("Address: ")
 
-input_df.loc[0] = 0
+# Create empty row
+input_df = pd.DataFrame(0, index=[0], columns=X.columns)
 
-for col, val in input_dict.items():
-    input_df[col] = val
+# Fill values
+input_df["Area"] = area
+input_df["Room"] = room
+input_df["Parking"] = parking
+input_df["Warehouse"] = warehouse
+input_df["Elevator"] = elevator
 
-print("The house price in USD is:", lr.predict(input_df))
+address_col = f"Address_{address}"
+
+if address_col in input_df.columns:
+    input_df[address_col] = 1
+
+prediction = model.predict(input_df)
+
+print(f"\nPredicted House Price: ${prediction[0]:,.2f}")
